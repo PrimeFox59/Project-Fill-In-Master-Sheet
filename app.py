@@ -57,7 +57,7 @@ st.set_page_config(layout="wide")
 st.title("📊 Master Sheet Assistant")
 st.caption("Pisah menu: Dashboard & Input Data")
 
-menu = st.sidebar.radio("Menu", ["Dashboard", "Input Data"], index=1)
+menu = st.sidebar.radio("Menu", ["Dashboard", "Input Data", "Panduan Pengguna"], index=1)
 
 # Session placeholders
 if "template_df" not in st.session_state:
@@ -414,7 +414,125 @@ def render_input():
 
 
 # --- Router ---
+def render_guide():
+    st.header("📘 Panduan Pengguna")
+    st.write("Dokumen ini menjelaskan cara menggunakan aplikasi secara lengkap, dari persiapan file hingga interpretasi dashboard.")
+
+    st.markdown("""
+    ## 1. Ringkasan Aplikasi
+    Aplikasi ini membantu Anda:
+    - Menghitung jumlah keterlibatan/kemunculan per perusahaan (berdasarkan kolom "Site Name") dari file sumber Excel.
+    - Memperbarui file template Excel pada sheet "Master Sheet" sesuai kolom target yang dipilih, dengan dua mode: Add (Tambah) dan Replace (Ganti).
+    - Menjelajah hasil pada menu Dashboard: Overview, Top/Bottom, Matrix perbandingan kategori, dan Profil perusahaan.
+    """)
+
+    with st.expander("2. Persiapan Data (Wajib dibaca)", expanded=False):
+        st.markdown("""
+        ### 2.1. File Sumber (Raw Data)
+        - Format: .xlsx
+        - Header berada di baris ke-2 (kode menggunakan `header=1`).
+        - Kolom minimal yang dibutuhkan:
+          - `Student Code` dan `Course Code` (baris dengan nilai kosong di salah satu akan diabaikan)
+          - `Site Name` (nama perusahaan/partner/instansi)
+        - Kolom lain akan diabaikan oleh proses hitung, tetapi tetap boleh ada.
+
+        ### 2.2. File Template
+        - Format: .xlsx atau .xlsm (macro akan dipertahankan karena `keep_vba=True`).
+        - Wajib memiliki sheet bernama `Master Sheet`.
+        - Kolom pertama (kolom A) adalah nama perusahaan (misal: `Partner Name / Site Name / Company Name`).
+        - Kolom berikutnya (B, C, dst) adalah kategori-kategori yang akan tampil di Dashboard. Nilai non-numerik (mis. `Y`) dianggap 0 pada visualisasi.
+        - Judul/header dianggap berada pada baris pertama sheet.
+        """)
+
+    with st.expander("3. Mode Pemrosesan: Add vs Replace"):
+        st.markdown("""
+        - Add (Tambah): nilai pada kolom target akan ditambahkan dengan hasil hitungan baru.
+          - Contoh: nilai lama 10, hasil hitung baru 3 → disimpan 13.
+        - Replace (Ganti): nilai pada kolom target diganti total dengan hasil hitung baru.
+          - Contoh: nilai lama 10, hasil hitung baru 3 → disimpan 3.
+        - Jika perusahaan belum ada di template, baris baru akan ditambahkan otomatis.
+        """)
+
+    with st.expander("4. Langkah di Menu Input Data", expanded=True):
+        st.markdown("""
+        1) Upload File Sumber (.xlsx).
+        2) Upload File Template (.xlsx atau .xlsm) yang memiliki sheet `Master Sheet`.
+        3) Pilih kolom target (dari header `Master Sheet`) untuk menampung hasil hitungan.
+        4) Pilih Mode (Add/Replace).
+        5) Klik "Proses Sekarang!" dan tunggu hingga pratinjau hasil muncul.
+        6) Unduh hasil melalui tombol Download. Ekstensi mengikuti file template (jika template .xlsm, hasil juga .xlsm, macro tetap aman).
+
+        Catatan teknis saat menyimpan ke template:
+        - Aplikasi membaca seluruh header pada baris pertama `Master Sheet`.
+        - Mencari baris perusahaan berdasarkan isi kolom pertama.
+        - Jika tidak ditemukan, menyisipkan baris baru di akhir dan mengisi seluruh kolom yang ada di header.
+        """)
+
+    with st.expander("5. Langkah di Menu Dashboard"):
+        st.markdown("""
+        - Upload (atau gunakan yang sudah di-upload dari menu Input Data) file template untuk dipakai sebagai sumber Dashboard.
+        - Kategori yang tampil di Dashboard diambil otomatis dari seluruh header `Master Sheet` selain kolom pertama.
+
+        5.1 Overview
+        - KPI Cards: Total, Rata-rata, Maksimum, Minimum (ditampilkan dengan kartu modern).
+        - Distribusi Nilai: histogram nilai kategori terpilih.
+        - Sampel Data: Top 5 dan Bottom 5.
+
+        5.2 Top/Bottom
+        - Pilih mode Top atau Bottom, jumlah N, serta opsi sertakan nilai 0.
+        - Tabel dan grafik bar horizontal tersedia.
+        - Dapat diunduh sebagai CSV.
+
+        5.3 Matrix
+        - Pilih hingga 6 kategori untuk dibandingkan.
+        - Pilih Top N perusahaan berdasarkan total penjumlahan nilai kategori terpilih.
+        - Ditampilkan dalam bentuk heatmap (atau tabel jika Plotly tidak tersedia).
+
+        5.4 Company Profile
+        - Pilih satu perusahaan untuk melihat semua nilai kategori yang tersedia.
+        - Visualisasi radar atau bar (fallback) akan ditampilkan.
+        """)
+
+    with st.expander("6. Tips, Batasan, dan Best Practice"):
+        st.markdown("""
+        - Nilai non-numerik pada kategori akan dianggap 0 di Dashboard. Jika ingin dihitung, konversikan terlebih dahulu (misal `Y` → 1).
+        - Pastikan nama kolom persis (case-sensitive) terutama `Student Code`, `Course Code`, `Site Name` di file sumber.
+        - Untuk performa pada file besar, simpan file ke disk lokal (bukan network drive) saat pemrosesan.
+        - Hindari nama perusahaan duplikat dalam template; jika terjadi, sistem akan memperbarui baris pertama yang cocok.
+        - Simpan backup template sebelum overwrite, terutama untuk file `.xlsm` yang memiliki macro penting.
+        """)
+
+    with st.expander("7. Troubleshooting (Masalah Umum)"):
+        st.markdown("""
+        - "Sheet 'Master Sheet' tidak ditemukan": pastikan nama sheet sesuai dan huruf kapital cocok.
+        - "Kolom tidak ditemukan": cek ejaan header. Untuk file sumber, pastikan ada `Student Code`, `Course Code`, `Site Name`.
+        - "Grafik kosong / semua 0": kemungkinan kolom kategori berisi teks non-numerik, atau filter menghapus semua baris.
+        - "Tidak bisa download": pastikan ukuran file tidak terlalu besar dan browser mengizinkan unduhan.
+        """)
+
+    with st.expander("8. Menjalankan Aplikasi (Windows PowerShell)"):
+        st.markdown("""
+        Perintah opsional jika ingin menjalankan secara manual:
+        ```powershell
+        # (Opsional) Install dependensi sesuai proyek Anda
+        # pip install -r requirements.txt
+
+        # Jalankan aplikasi
+        streamlit run "c:\\Users\\PRIMA\\OneDrive\\Documents\\PROJECT\\0 TRIAL\\Project Fill in Master sheet\\app.py"
+        ```
+        """)
+
+    with st.expander("9. FAQ"):
+        st.markdown("""
+        - Apakah kategori harus ditentukan manual? Tidak. Kategori dibaca otomatis dari header `Master Sheet` (kecuali kolom pertama).
+        - Apakah macro hilang saat menyimpan? Tidak, macro `.xlsm` dipertahankan (`keep_vba=True`).
+        - Apakah bisa mengubah baris header sumber? Saat ini diasumsikan header di baris 2 (`header=1`). Jika berbeda, kode perlu disesuaikan.
+        """)
+
+
 if menu == "Dashboard":
     render_dashboard()
-else:
+elif menu == "Input Data":
     render_input()
+else:
+    render_guide()
