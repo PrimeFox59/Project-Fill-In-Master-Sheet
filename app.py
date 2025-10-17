@@ -416,7 +416,18 @@ def render_input():
 # --- Router ---
 def render_guide():
     st.header("📘 Panduan Pengguna")
-    st.write("Dokumen ini menjelaskan cara menggunakan aplikasi secara lengkap, dari persiapan file hingga interpretasi dashboard.")
+    st.write("Panduan lengkap untuk menggunakan aplikasi—fokus pada versi yang sudah dideploy di Streamlit Cloud.")
+
+    st.success("Gunakan versi cloud: https://fillmastersheet.streamlit.app/ (klik link)")
+    st.markdown("""
+    ### Quick Start (Paling Cepat)
+    1. Buka: [fillmastersheet.streamlit.app](https://fillmastersheet.streamlit.app/)
+    2. Masuk ke menu "Input Data".
+    3. Upload File Sumber (.xlsx) dan File Template (.xlsx/.xlsm).
+    4. Pilih kolom target dan mode (Add/Replace), lalu klik "Proses Sekarang!".
+    5. Download hasil (ekstensi mengikuti template, .xlsm tetap menyimpan macro).
+    6. Pindah ke menu "Dashboard" untuk eksplorasi data: Overview, Top/Bottom, Matrix, dan Profil perusahaan.
+    """)
 
     st.markdown("""
     ## 1. Ringkasan Aplikasi
@@ -510,9 +521,19 @@ def render_guide():
         - "Tidak bisa download": pastikan ukuran file tidak terlalu besar dan browser mengizinkan unduhan.
         """)
 
-    with st.expander("8. Menjalankan Aplikasi (Windows PowerShell)"):
+    with st.expander("8. Catatan untuk Pengguna di Streamlit Cloud", expanded=True):
         st.markdown("""
-        Perintah opsional jika ingin menjalankan secara manual:
+        - Data Anda hanya digunakan pada sesi Anda; hindari mengunggah data sensitif jika tidak diperlukan.
+        - Ukuran file upload mengikuti batas default Streamlit Cloud. Jika file besar, pertimbangkan untuk:
+          - Menghapus sheet yang tidak perlu
+          - Mengompresi/meringkas data sumber
+        - Jika upload lama atau gagal, cek koneksi internet dan coba ulang.
+        - Disarankan menggunakan browser modern (Chrome/Edge) versi terbaru.
+        """)
+
+    with st.expander("9. Jalankan di Komputer Sendiri (Opsional)"):
+        st.markdown("""
+        Perintah opsional jika ingin menjalankan secara manual di Windows PowerShell:
         ```powershell
         # (Opsional) Install dependensi sesuai proyek Anda
         # pip install -r requirements.txt
@@ -522,7 +543,7 @@ def render_guide():
         ```
         """)
 
-    with st.expander("9. FAQ"):
+    with st.expander("10. FAQ"):
         st.markdown("""
         - Apakah kategori harus ditentukan manual? Tidak. Kategori dibaca otomatis dari header `Master Sheet` (kecuali kolom pertama).
         - Apakah macro hilang saat menyimpan? Tidak, macro `.xlsm` dipertahankan (`keep_vba=True`).
