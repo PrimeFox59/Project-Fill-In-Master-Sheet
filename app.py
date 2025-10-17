@@ -75,8 +75,30 @@ def render_dashboard():
     st.markdown(
         """
         <style>
-        .metric-card {padding: 8px 12px; border-radius: 8px; background: #f6f8fa; border: 1px solid #e1e4e8;}
-        .section-title {margin-top: 0.5rem;}
+                .section-title {margin-top: 0.5rem;}
+
+                /* Modern KPI cards */
+                .kpi-card{
+                    position: relative;
+                    display: flex; flex-direction: column; gap: 6px;
+                    padding: 14px 16px; border-radius: 14px;
+                    background: linear-gradient(135deg, #ffffff 0%, #f5f8ff 100%);
+                    border: 1px solid #e6eaf2; box-shadow: 0 2px 10px rgba(28, 39, 60, 0.06);
+                    min-height: 110px;
+                }
+                .kpi-head{display:flex; align-items:center; gap:8px; color:#4b5563; font-weight:600; font-size: 0.95rem;}
+                .kpi-icon{width: 36px; height: 36px; border-radius: 10px; display:flex; align-items:center; justify-content:center; color:#fff; font-size: 18px;}
+                .kpi-icon.primary{background: linear-gradient(135deg, #2563eb, #1d4ed8);} /* blue */
+                .kpi-icon.success{background: linear-gradient(135deg, #10b981, #059669);}  /* green */
+                .kpi-icon.warning{background: linear-gradient(135deg, #f59e0b, #d97706);}  /* orange */
+                .kpi-icon.slate{background: linear-gradient(135deg, #64748b, #475569);}    /* slate */
+                .kpi-value{font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; color:#111827; margin-top:4px;}
+                .kpi-sub{color:#6b7280; font-size: 0.85rem;}
+                .kpi-badge{position:absolute; right:10px; top:10px; font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; background:#eef2ff; color:#3730a3; border:1px solid #e0e7ff;}
+                .muted{color:#6b7280}
+        
+                /* Subtle animated gradient dot */
+                .kpi-dot{position:absolute; right:14px; bottom:14px; width:8px; height:8px; border-radius:999px; background: radial-gradient(circle at 30% 30%, #93c5fd, #2563eb); opacity:0.5}
         </style>
         """,
         unsafe_allow_html=True,
@@ -134,17 +156,53 @@ def render_dashboard():
         max_row = df_cat.loc[df_cat[category].idxmax()] if not df_cat.empty else None
         min_row = df_cat.loc[df_cat[category].idxmin()] if not df_cat.empty else None
 
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric("Total", f"{total_val:,.0f}")
-        with m2:
-            st.metric("Rata-rata", f"{avg_val:,.2f}")
-        with m3:
-            st.metric("Maksimum", f"{(max_row[category] if max_row is not None else 0):,.0f}",
-                      help=f"Perusahaan: {str(max_row[site_name_col]) if max_row is not None else '-'}")
-        with m4:
-            st.metric("Minimum", f"{(min_row[category] if min_row is not None else 0):,.0f}",
-                      help=f"Perusahaan: {str(min_row[site_name_col]) if min_row is not None else '-'}")
+        def fmt_value(v: float) -> str:
+            if v is None:
+                return "-"
+            # show two decimals for small numbers, else thousands separator
+            if abs(v) < 1:
+                return f"{v:,.2f}"
+            # if integer-like, no decimals
+            if float(v).is_integer():
+                return f"{int(v):,}"
+            return f"{v:,.2f}"
+
+        def metric_card(title: str, value: float, subtitle: str = "", icon: str = "📊", tone: str = "primary"):
+            html = f"""
+            <div class='kpi-card'>
+              <div class='kpi-head'>
+                 <div class='kpi-icon {tone}'>{icon}</div>
+                 <div>{title}</div>
+                 <div class='kpi-badge'>Kategori</div>
+              </div>
+              <div class='kpi-value'>{fmt_value(value)}</div>
+              <div class='kpi-sub'>{subtitle}</div>
+              <div class='kpi-dot'></div>
+            </div>
+            """
+            st.markdown(html, unsafe_allow_html=True)
+
+        k1, k2, k3, k4 = st.columns(4)
+        with k1:
+            metric_card("Total", total_val, subtitle=f"Jumlah nilai untuk {category}", icon="Σ", tone="primary")
+        with k2:
+            metric_card("Rata-rata", avg_val, subtitle=f"Rata-rata per perusahaan", icon="⌀", tone="slate")
+        with k3:
+            metric_card(
+                "Maksimum",
+                float(max_row[category]) if max_row is not None else 0,
+                subtitle=f"Perusahaan: {str(max_row[site_name_col]) if max_row is not None else '-'}",
+                icon="⬆",
+                tone="success",
+            )
+        with k4:
+            metric_card(
+                "Minimum",
+                float(min_row[category]) if min_row is not None else 0,
+                subtitle=f"Perusahaan: {str(min_row[site_name_col]) if min_row is not None else '-'}",
+                icon="⬇",
+                tone="warning",
+            )
 
         st.markdown("### Distribusi Nilai", help="Sebaran nilai pada kategori yang dipilih.")
         if PLOTLY_AVAILABLE:
