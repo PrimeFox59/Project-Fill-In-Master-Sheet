@@ -3,6 +3,10 @@ import streamlit as st
 import pandas as pd
 import io
 import openpyxl
+import sqlite3
+import json
+from pathlib import Path
+from datetime import datetime
 
 # Optional viz libs
 try:
@@ -46,6 +50,124 @@ def process_data(source_df, template_df, target_column, mode):
             # Tambahkan baris baru ke DataFrame
             updated_df = pd.concat([updated_df, pd.DataFrame([new_row])], ignore_index=True)
     return updated_df
+
+# --- SQLite helpers ---
+DB_PATH = Path(__file__).with_name("master_sheet.db")
+
+def _get_conn():
+    # check_same_thread=False allows usage across Streamlit threads
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+def init_db():
+    with _get_conn() as conn:
+        c = conn.cursor()
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                site_name_header TEXT NOT NULL,
+                columns_json TEXT NOT NULL
+            )
+            """
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS master_values (
+                run_id INTEGER NOT NULL,
+                site_name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                value REAL,
+                PRIMARY KEY (run_id, site_name, category),
+                FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.commit()
+
+def save_result_to_db(result_df: pd.DataFrame, header: list[str]) -> dict:
+    """Persist a processed wide table into SQLite in a normalized form.
+    Returns metadata for the run: {run_id, created_at, site_name_header, categories}
+    """
+    if not isinstance(result_df, pd.DataFrame) or not header or len(header) < 1:
+        return {}
+    init_db()
+    site_name_header = str(header[0])
+    categories = [str(c) for c in header[1:]]
+    created_at = datetime.utcnow().isoformat()
+
+    with _get_conn() as conn:
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO runs (created_at, site_name_header, columns_json) VALUES (?, ?, ?)",
+            (created_at, site_name_header, json.dumps(categories)),
+        )
+        run_id = c.lastrowid
+
+        # Prepare insert
+        rows_to_insert = []
+        for _, row in result_df.iterrows():
+            site_name = row.get(site_name_header, None)
+            if pd.isna(site_name):
+                continue
+            site_name = str(site_name)
+            for cat in categories:
+                val = row.get(cat, None)
+                # Coerce to numeric if possible, otherwise NULL
+                try:
+                    val_num = pd.to_numeric(val, errors="coerce")
+                    val_out = None if pd.isna(val_num) else float(val_num)
+                except Exception:
+                    val_out = None
+                rows_to_insert.append((run_id, site_name, cat, val_out))
+
+        c.executemany(
+            "INSERT OR REPLACE INTO master_values (run_id, site_name, category, value) VALUES (?, ?, ?, ?)",
+            rows_to_insert,
+        )
+        conn.commit()
+
+    return {"run_id": run_id, "created_at": created_at, "site_name_header": site_name_header, "categories": categories}
+
+def load_latest_from_db() -> dict | None:
+    """Load the most recent run and reconstruct a wide DataFrame.
+    Returns dict: { df, meta }
+    """
+    if not DB_PATH.exists():
+        return None
+    init_db()
+    with _get_conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT id, created_at, site_name_header, columns_json FROM runs ORDER BY id DESC LIMIT 1")
+        row = c.fetchone()
+        if not row:
+            return None
+        run_id, created_at, site_name_header, columns_json = row
+        categories = json.loads(columns_json)
+        c.execute("SELECT site_name, category, value FROM master_values WHERE run_id = ?", (run_id,))
+        vals = c.fetchall()
+
+    # Build wide DataFrame
+    data_map = {}
+    for site_name, category, value in vals:
+        if site_name not in data_map:
+            data_map[site_name] = {cat: None for cat in categories}
+        if category in data_map[site_name]:
+            data_map[site_name][category] = value
+
+    rows = []
+    for site, cat_map in data_map.items():
+        row = {site_name_header: site}
+        row.update(cat_map)
+        rows.append(row)
+
+    if not rows:
+        return None
+    df = pd.DataFrame(rows)
+    # Ensure column order: site name first, then categories
+    df = df[[site_name_header] + categories]
+    meta = {"run_id": run_id, "created_at": created_at, "site_name_header": site_name_header, "categories": categories}
+    return {"df": df, "meta": meta}
 
 # --- UI Streamlit ---
 st.set_page_config(layout="wide")
@@ -103,6 +225,17 @@ def render_dashboard():
         """,
         unsafe_allow_html=True,
     )
+
+    # Try loading latest processed data from DB if session template is empty
+    template_df = st.session_state.template_df
+    if template_df is None:
+        loaded = load_latest_from_db()
+        if loaded is not None:
+            template_df = loaded["df"]
+            st.session_state.template_df = template_df
+            st.session_state._db_meta = loaded["meta"]
+            st.info(
+                f"Using latest processed data from database (run at {loaded['meta']['created_at']} UTC). Upload a template to override.")
 
     # Upload template if not already in session
     uploaded_template = st.file_uploader(
@@ -399,6 +532,16 @@ def render_input():
                         if ext == ".xlsm"
                         else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+
+                    # Save to SQLite database for Dashboard auto-use
+                    try:
+                        run_meta = save_result_to_db(result_df, header)
+                        if run_meta:
+                            st.success(
+                                f"Saved to local database '{DB_PATH.name}' (run id {run_meta['run_id']}). Dashboard will use this automatically.")
+                    except Exception as db_err:
+                        st.warning(f"Failed to save to database: {db_err}")
+
                     st.download_button(
                         label="📥 Download Result File",
                         data=processed_data,
