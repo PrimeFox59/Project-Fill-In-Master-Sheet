@@ -350,7 +350,7 @@ def render_input():
 
             mode = st.radio(
                 "Choose the update mode:",
-                options=["Add (Add)", "Replace (Replace)"],
+                options=["Add (Tambah)", "Replace (Ganti)"],
                 help="Add: add the new counts to existing values. Replace: overwrite existing values with the new counts.",
                 key="mode_radio",
             )
@@ -553,7 +553,7 @@ streamlit run "c:\\Users\\PRIMA\\OneDrive\\Documents\\PROJECT\\0 TRIAL\\Project 
 
 if menu == "Dashboard":
     render_dashboard()
-elif menu == "Input Data":
+elif menu == "Data Input":
     render_input()
 else:
     render_guide()
